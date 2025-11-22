@@ -1,11 +1,12 @@
 #!/usr/bin/env perl
 #-------------------------------------------------------------------------------
-# Project  : Postgresql Database Security Assessment Tool
-# Name     : pgdsat
+# Project  : UXDB Database Security Assessment Tool
+# Name     : uxdbsat
+# Modify	:Steven Tong
 # Author   : Gilles Darold
 # Copyright: Copyright (c) 2024 HexaCluster Corp
 # Function : Tool used to perform a reliable and repeatable security assessment
-#            on PostgreSQL clusters
+#            on uxdb clusters
 #-------------------------------------------------------------------------------
 #
 #        This program is free software: you can redistribute it and/or modify
@@ -57,7 +58,7 @@ my @options = (
 	'lang|l=s',
 	'output|o=s',
 	'port|p=i',
-	'psql|P=s',
+	'uxsql|P=s',
 	'title|T=s',
 	'version|v!',
 	'cluster|V=s',
@@ -69,12 +70,12 @@ my @options = (
 my %cfg = ();
 
 my $optres = GetOptions(\%cfg, @options);
-die "FATAL: use pgdsat --help\n" if (not $optres);
+die "FATAL: use uxdbsat --help\n" if (not $optres);
 
 # Show version and exit when request
 if ($cfg{version})
 {
-	print "pgdsat v$VERSION\n";
+	print "uxdbsat v$VERSION\n";
 	exit 0;
 }
 
@@ -94,8 +95,8 @@ $cfg{format} = 'html' if (!$cfg{format});
 # Set default title
 $cfg{title} ||= 'on ' . &get_hostname();
 
-# Verify that psql, systemctl, curl and lsblk are available from PATH
-foreach my $c (qw/psql systemctl curl lsblk/)
+# Verify that uxsql, systemctl, curl and lsblk are available from PATH
+foreach my $c (qw/uxsql systemctl curl lsblk/)
 {
 	next if ($cfg{'no-pg-version-check'} && $c eq 'curl');
 	`which $c 2>/dev/null`;
@@ -105,11 +106,11 @@ foreach my $c (qw/psql systemctl curl lsblk/)
 }
 
 ####
-# Run security tests following CIS PostgreSQL Benchmark 16
+# Run security tests following CIS uxsinodb Benchmark 16
 # with additionals checks by HexaCluster Corp
 ####
-my $pgdsat = new PGDSAT(%cfg);
-$pgdsat->run();
+my $uxdbsat = new PGDSAT(%cfg);
+$uxdbsat->run();
 
 exit 0;
 
@@ -123,49 +124,49 @@ exit 0;
 sub usage
 {
         print qq{
-Usage: pgdsat [options]
+Usage: uxdbsat [options]
 
-    PostgreSQL Database Security Assessment Tool.
+    uxdb Database Security Assessment Tool.
 
 Options:
 
     -a | --allow   : database to include into the report in parts 4.3 to 4.5.
                      Can be used multiple time and regexp are supported.
-    -d | --database: name of the database to connect to PostgreSQL.
-    -D | --pgdata  : path to the PostgreSQL cluster PGDATA to analyze.
+    -d | --database: name of the database to connect to uxdb.
+    -D | --pgdata  : path to the uxdb cluster PGDATA to analyze.
     -e | --exclude : database to exclude from the report in parts 4.3 to 4.5.
                      Can be used multiple time and regexp are supported.
     -f | --format  : output format, can be: text or html. Default: html.
-    -h | --host    : PostgreSQL serveur ip address if not listening on localhost
+    -h | --host    : uxdb serveur ip address if not listening on localhost
     -l | --lang    : language used for the output (en_US, fr_FR, zh_CN). Default: en_US
     -o | --output  : output file where to write the report. Default stdout.
-    -p | --port    : port where PostgreSQL is listening, default: 5432.
-    -P | --psql    : full path to the psql command if not found in PATH.
+    -p | --port    : port where uxdb is listening, default: 5432.
+    -P | --uxsql    : full path to the uxsql command if not found in PATH.
     -r | --remove  : check to remove from the report, it can be used multiple
                      time. The value can be the number of a check or a regexp.
     -T | --title   : set title to use to differentiate the reports. Default is
                      to use "on `hostname`".
-    -U | --user    : PostgreSQL user to use with the psql command.
-    -v | --version : show version of pgdsat and exist.
-    -V | --cluster : PostgreSQL Cluster version, ex: 15.4.
+    -U | --user    : uxdb user to use with the uxsql command.
+    -v | --version : show version of uxdbsat and exist.
+    -V | --cluster : uxdb Cluster version, ex: 15.4.
     --help         : show usage and exit.
 
-    --no-pg-version-check : disable check for PostgreSQL minor versions. Useful
+    --no-pg-version-check : disable check for uxdb minor versions. Useful
                      when connecting to Internet is not permitted.
 Example:
 
-    pgdsat -U postgres -h localhost -d postgres -o report.html
+    uxdbsat -U uxdb -h localhost -d uxdb -o report.html
 or
-    pgdsat -U postgres -h localhost -d postgres -f html > report.html
+    uxdbsat -U uxdb -h localhost -d uxdb -f html > report.html
 
-If you have several PostgreSQL cluster installed you must give the running
+If you have several uxdb cluster installed you must give the running
 version that you want to test:
 
-    pgdsat -U postgres -h localhost -d postgres -f html -V 15.4 > report.html
+    uxdbsat -U uxdb -h localhost -d uxdb -f html -V 15.4 > report.html
 
 If you want, for example, to remove all checks of section 1 from the report:
 
-    pgdsat -U postgres -h localhost -d postgres -V 15.4 -o report.html -r '1.*'
+    uxdbsat -U uxdb -h localhost -d uxdb -V 15.4 -o report.html -r '1.*'
 
 };
 
@@ -181,4 +182,3 @@ sub get_hostname
 	chomp($hostname);
 	$hostname ||= 'localhost';
 }
-
