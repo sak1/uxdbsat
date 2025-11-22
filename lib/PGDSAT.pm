@@ -1,7 +1,7 @@
 package PGDSAT;
 
 #------------------------------------------------------------------------------
-# Project  : PostgreSQL Database Security Assement Tool
+# Project  : UXDB Database Security Assement Tool
 # Name     : PGDSAT.pm
 # Language : Perl
 # Authors  : Gilles Darold
@@ -70,19 +70,19 @@ sub _init
 	# Cluster to scan if there are several ones running
 	$self->{cluster} = $options{cluster} || '';
 	# No check for PG version
-	$self->{no_check_pg_version} = $options{no_check_pg_version} || 0;
+	$self->{no_check_ux_version} = $options{no_check_ux_version} || 0;
 	# Output file
 	$self->{output} = $options{output} || '-';
 	# Label to use in the title of the report
 	$self->{title} = $options{title} || '';
 
-	# variables to store psql options provided at command line
+	# variables to store uxsql options provided at command line
 	$self->{host} = $options{host} || '';
 	$self->{port} = $options{port} || 0;
 	$self->{user} = $options{user} || '';
 	$self->{database} = $options{database} || '';
-	$self->{psql} = $options{psql} || 'psql';
-	$self->{pgdata} = $options{pgdata} || '';
+	$self->{uxsql} = $options{uxsql} || 'uxsql';
+	$self->{uxdata} = $options{uxdata} || '';
 
 	# variables to store information that are used in several methods
 	$self->{hba_entries} = ();
@@ -103,50 +103,50 @@ sub _init
 	$self->{remove}   = ();
 	push(@{ $self->{remove} }, @{$options{remove}}) if ($#{$options{remove}} >= 0);
 
-	# Compose the psql system command call
-	$self->{pgdb}     ||= $ENV{PGDATABASE};
-	$self->{$self->{host}}   ||= $ENV{PGHOST};
-	$self->{$self->{port}}   ||= $ENV{PGPORT};
-	$self->{$self->{user}}   ||= $ENV{PGUSER};
-	$self->{pgdata}   ||= $ENV{PGDATA};
-	$self->{psql} .= " -U $self->{user}" if ($self->{user});
-	$self->{psql} .= " -h $self->{host}" if ($self->{host});
-	$self->{psql} .= " -p $self->{port}" if ($self->{port});
-	$self->{psql} .= " -d $self->{database}" if ($self->{database});
-	# We want the default language for psql messages and no look at .psqlrc
-	$self->{psql} = 'LANG=C ' . $self->{psql} . ' -X';
+	# Compose the uxsql system command call
+	$self->{uxdb}     ||= $ENV{UXDATABASE};
+	$self->{$self->{host}}   ||= $ENV{UXHOST};
+	$self->{$self->{port}}   ||= $ENV{UXPORT};
+	$self->{$self->{user}}   ||= $ENV{UXUSER};
+	$self->{uxdata}   ||= $ENV{UXDATA};
+	$self->{uxsql} .= " -U $self->{user}" if ($self->{user});
+	$self->{uxsql} .= " -h $self->{host}" if ($self->{host});
+	$self->{uxsql} .= " -p $self->{port}" if ($self->{port});
+	$self->{uxsql} .= " -d $self->{database}" if ($self->{database});
+	# We want the default language for uxsql messages and no look at .uxsqlrc
+	$self->{uxsql} = 'LANG=C ' . $self->{uxsql} . ' -X';
 
 	# Verify that the connection user is really superuser
-	my $is_superuwser = `$self->{psql} -Atc "select 1 from pg_roles where rolname = current_user and rolsuper;"`;
+	my $is_superuwser = `$self->{uxsql} -Atc "select 1 from ux_roles where rolname = current_user and rolsuper;"`;
 	chomp($is_superuwser);
-	die "FATAL: this program must be run as PostgreSQL superuser: $self->{psql} -Atc ...\n" if (!$is_superuwser);
+	die "FATAL: this program must be run as UXDB superuser: $self->{uxsql} -Atc ...\n" if (!$is_superuwser);
 
-        # Check that the PostgreSQL have the version specified by --cluster
-        my $ver = `$self->{psql} -Atc "SELECT version();"`;
+        # Check that the UXDB have the version specified by --cluster
+        my $ver = `$self->{uxsql} -Atc "SELECT version();"`;
         chomp($ver);
 	if ($self->{cluster} and $ver !~ /$self->{cluster}/) {
-		die "FATAL: cluster version $self->{cluster} doesn't match the PostgreSQL version: $ver.\n";
+		die "FATAL: cluster version $self->{cluster} doesn't match the UXDB version: $ver.\n";
 	}
 
 	# limit the check to the running cluster
 	@{ $self->{pkg_ver} } = ($self->{cluster}) if ($self->{cluster});
 
-	# Verify that we have permission to read the PGDATA and set $self->{pgdata}
-	my $data_dir = $self->{pgdata} || `$self->{psql} -Atc "SHOW data_directory"`;
+	# Verify that we have permission to read the UXDBDATA and set $self->{uxdata}
+	my $data_dir = $self->{uxdata} || `$self->{uxsql} -Atc "SHOW data_directory"`;
 	chomp($data_dir);
 	if ($data_dir)
 	{
 		$data_dir =~ s/\/$//;
-		$self->{pgdata} = $data_dir;
+		$self->{uxdata} = $data_dir;
 	}
 
-	# Get the list of the database in the PostgreSQL cluster
-	@{$self->{dbs}} = `$self->{psql} -Atc "SELECT datname FROM pg_database WHERE datallowconn ORDER BY 1;"`;
+	# Get the list of the database in the UXDB cluster
+	@{$self->{dbs}} = `$self->{uxsql} -Atc "SELECT datname FROM ux_database WHERE datallowconn ORDER BY 1;"`;
 	chomp(@{$self->{dbs}});
 }
 
 ####
-# Run security tests according to CIS PostgreSQL Benchmark 16
+# Run security tests according to CIS UXDB Benchmark 16
 # with additionals checks by HexaCluster Corp
 ####
 sub run
@@ -319,9 +319,9 @@ sub logdata
 }
 
 ####
-# Parse the pg_hba.conf file and return an array of hash for each entry
+# Parse the ux_hba.conf file and return an array of hash for each entry
 ####
-sub load_pg_hba_file
+sub load_ux_hba_file
 {
 	my ($self, $file) = @_;
 	my $fh = undef;
@@ -329,7 +329,7 @@ sub load_pg_hba_file
 	open($fh, '<', $file);
 	if (not defined $fh)
 	{
-		$self->logmsg('5.2', 'CRITICAL', 'Can not read pg_hba.conf file "%s", reason: "%s".', $file, $!);
+		$self->logmsg('5.2', 'CRITICAL', 'Can not read ux_hba.conf file "%s", reason: "%s".', $file, $!);
 		return;
 	}
 
@@ -346,7 +346,7 @@ sub load_pg_hba_file
 		# Read included files if any
 		if ($data[0] =~ /^include(_if_exists)?$/)
 		{
-			push(@entries, $self->load_pg_hba_file($data[1]));
+			push(@entries, $self->load_ux_hba_file($data[1]));
 			next;
 		}
 		elsif ($data[0] =~ /^include_dir$/)
@@ -360,7 +360,7 @@ sub load_pg_hba_file
 			closedir DIR;
 			foreach my $f (sort { $a <=> $b } @conf_files)
 			{
-				push(@entries, $self->load_pg_hba_file($f));
+				push(@entries, $self->load_ux_hba_file($f));
 			}
 			next;
 		}
@@ -368,12 +368,12 @@ sub load_pg_hba_file
 		# skip unknown lines
 		next if ($data[0] !~ /^(local|host(ssl|nossl|gssenc|nogssenc)?)$/);
 
-		# Store information about SSL or GSS presence in the pg_hba.conf file
+		# Store information about SSL or GSS presence in the ux_hba.conf file
 		$self->{use_ssl} = 1 if ($data[0] eq 'hostssl');
 		$self->{use_gssenc} = 1 if ($data[0] eq 'hostgssenc');
 		$self->{use_host} = 1 if ($data[0] =~ /^(host|hostnossl|hostnogssenc)$/);
 
-		# Build the pg_hba entry struct
+		# Build the ux_hba entry struct
 		my %hba_entry = (
 			'source' => $l,
 			'type' => $data[0],
@@ -433,13 +433,13 @@ sub check_1_1_1
 {
 	my $self = shift;
 
-	my @packages = `rpm -qa 2>/dev/null| grep -E "postgresql[1-9\.]{1,2}-server"`;
+	my @packages = `rpm -qa 2>/dev/null| grep -E "uxdb[1-9\.]{1,2}-server"`;
 	if ($#packages < 0) {
-		@packages = `dpkg -l 2>/dev/null | grep -E "postgresql-[1-9]{1,2}" | sed 's/^ii //'`;
+		@packages = `dpkg -l 2>/dev/null | grep -E "uxdb-[1-9]{1,2}" | sed 's/^ii //'`;
 	}
 
 	if ($#packages < 0) {
-		$self->logmsg('1.1', 'CRITICAL', 'No PostgreSQL packages found.');
+		$self->logmsg('1.1', 'CRITICAL', 'No UXDB packages found.');
 		$self->{results}{'1.1.1'} = 'FAILURE';
 	}
 	$self->logdata(@packages);
@@ -449,13 +449,13 @@ sub check_1_1_2
 {
 	my $self = shift;
 
-	@{ $self->{pkg_ver} } = `rpm -qa 2>/dev/null| grep -E "postgresql[1-9\.]{1,2}-server" | grep -i PGDG | awk -F "-" '{print \$3}' | sort -u`;
+	@{ $self->{pkg_ver} } = `rpm -qa 2>/dev/null| grep -E "uxdb[1-9\.]{1,2}-server" | grep -i UXDG | awk -F "-" '{print \$3}' | sort -u`;
 	if ($#{ $self->{pkg_ver} } < 0) {
-		@{ $self->{pkg_ver} } = `dpkg -l 2>/dev/null | grep -E "postgresql-[1-9]{1,2} .*pgdg" | awk '{print \$3}' | sed 's/-.*//' | sort -u`;
+		@{ $self->{pkg_ver} } = `dpkg -l 2>/dev/null | grep -E "uxdb-[1-9]{1,2} .*uxdg" | awk '{print \$3}' | sed 's/-.*//' | sort -u`;
 	}
 	chomp(@{ $self->{pkg_ver} });
 	if ($#{ $self->{pkg_ver} } < 0) {
-		$self->logmsg('1.2', 'WARNING', 'PostgreSQL packages are not from the PGDG repository.');
+		$self->logmsg('1.2', 'WARNING', 'UXDB packages are not from the UXDG repository.');
 		$self->{results}{'1.1.2'} = 'FAILURE';
 	}
 	else
@@ -480,27 +480,27 @@ sub check_1_2
 	{
 		my ($major, $minor) = split(/\./, $ver);
 
-		my $ret = `systemctl is-enabled postgresql-$major.service 2>/dev/null`;
+		my $ret = `systemctl is-enabled uxdb-$major.service 2>/dev/null`;
 		if (!$ret) {
-			$ret = `systemctl is-enabled postgresql\@$major-main.service 2>/dev/null`;
+			$ret = `systemctl is-enabled uxdb\@$major-main.service 2>/dev/null`;
 		}
 		chomp($ret);
 		if ($ret ne 'enabled')
 		{
 			if (!$patroni)
 			{
-				$self->logmsg('1.7', 'WARNING', 'PostgreSQL version %s, is not enabled as a systemd service.', $major);
+				$self->logmsg('1.7', 'WARNING', 'UXDB version %s, is not enabled as a systemd service.', $major);
 				$self->{results}{'1.2'} = 'FAILURE';
 			}
 		}
 		elsif (!$patroni)
 		{
-			$self->logmsg('1.17', 'INFO', 'PostgreSQL version %s, is enabled as a systemd service.', $major, $major);
+			$self->logmsg('1.17', 'INFO', 'UXDB version %s, is enabled as a systemd service.', $major, $major);
 			$self->{results}{'1.2'} = 'SUCCESS';
 		}
-		$ret = `systemctl status postgresql-$major.service 2>/dev/null | grep "active (running)"`;
+		$ret = `systemctl status uxdb-$major.service 2>/dev/null | grep "active (running)"`;
 		if (!$ret) {
-			$ret = `systemctl status postgresql\@$major-main.service 2>/dev/null | grep "active (running)"`;
+			$ret = `systemctl status uxdb\@$major-main.service 2>/dev/null | grep "active (running)"`;
 		}
 		if ($ret) {
 			$running = "$major.$minor";
@@ -508,7 +508,7 @@ sub check_1_2
 	}
 
 	if ($patroni && $running) {
-		$self->logmsg('1.8', 'WARNING', "PostgreSQL systemd service must not be enabled when patroni is used.");
+		$self->logmsg('1.8', 'WARNING', "UXDB systemd service must not be enabled when patroni is used.");
 		$self->{results}{'1.2'} = 'FAILURE';
 	}
 
@@ -531,18 +531,18 @@ sub check_1_3_1
 
 	my ($major, $minor) = split(/\./, $self->{cluster});
 
-	# Check that we have permission to read the PGDATA
-	my $base_ver = `ls -la "$self->{pgdata}/PG_VERSION" 2>&1`;
+	# Check that we have permission to read the UXDBDATA
+	my $base_ver = `ls -la "$self->{uxdata}/UX_VERSION" 2>&1`;
 	my $status = $? >> 8;
 	if ($status != 0) {
-		die "FATAL: can not read data directory $self->{pgdata}, insuffisient privilege.\n";
+		die "FATAL: can not read data directory $self->{uxdata}, insuffisient privilege.\n";
 	}
 
-	# Verify that the PGDATA is initialized
-	$base_ver = `find "$self->{pgdata}/base/" -name PG_VERSION 2>/dev/null | xargs -i cat {} | sort -u`;
+	# Verify that the UXDBDATA is initialized
+	$base_ver = `find "$self->{uxdata}/base/" -name UX_VERSION 2>/dev/null | xargs -i cat {} | sort -u`;
 	chomp($base_ver);
 	if (!$base_ver) {
-		$self->logmsg('1.9', 'CRITICAL', 'Wrong or no base directory found, the PGDATA (%s) must be initialized first (see initdb).', $self->{pgdata});
+		$self->logmsg('1.9', 'CRITICAL', 'Wrong or no base directory found, the UXDBDATA (%s) must be initialized first (see initdb).', $self->{uxdata});
 		$self->{results}{'1.3.1'} = 'FAILURE';
 	}
 	else
@@ -557,11 +557,11 @@ sub check_1_3_2
 
 	my ($major, $minor) = split(/\./, $self->{cluster});
 
-	# Verify that we have the right PG_VERSION
-	my $ver = `cat "$self->{pgdata}/PG_VERSION"`;
+	# Verify that we have the right UX_VERSION
+	my $ver = `cat "$self->{uxdata}/UX_VERSION"`;
 	chomp($ver);
 	if ($ver ne $major) {
-		$self->logmsg('1.10', 'CRITICAL', 'The version of the PGDATA (%s) does not correspond to the PostgreSQL cluster version; You need to upgrade the PGDATA v%s to v%s first.', $self->{pgdata}, $ver, $major);
+		$self->logmsg('1.10', 'CRITICAL', 'The version of the UXDBDATA (%s) does not correspond to the UXDB cluster version; You need to upgrade the UXDBDATA v%s to v%s first.', $self->{uxdata}, $ver, $major);
 		$self->{results}{'1.3.2'} = 'FAILURE';
 	}
 	else
@@ -577,13 +577,13 @@ sub check_1_3_3
 	my ($major, $minor) = split(/\./, $self->{cluster});
 
 	# Verify that checksum are enabled (HexaCluster)
-	my $checksum = `$self->{psql} -Atc "SELECT setting FROM pg_settings WHERE name IN ('data_checksums')"`;
+	my $checksum = `$self->{uxsql} -Atc "SELECT setting FROM ux_settings WHERE name IN ('data_checksums')"`;
 	chomp($checksum);
 	if ($checksum eq 'on')
 	{
 		$self->logmsg('0.1', 'SUCCESS', 'Test passed');
 		# Show stats about checksum failure if any
-		my @checksum_fail = `$self->{psql} -Atc "SELECT datname,checksum_failures,checksum_last_failure FROM pg_catalog.pg_stat_database WHERE checksum_failures > 0"`;
+		my @checksum_fail = `$self->{uxsql} -Atc "SELECT datname,checksum_failures,checksum_last_failure FROM ux_catalog.ux_stat_database WHERE checksum_failures > 0"`;
 		if ($#checksum_fail > 0)
 		{
 			unshift(@checksum_fail, "datname|checksum_failures|checksum_last_failure\n");
@@ -592,7 +592,7 @@ sub check_1_3_3
 	}
 	else
 	{
-		$self->logmsg('1.11', 'CRITICAL', 'Checksum are not enabled in PGDATA %s.', $self->{pgdata});
+		$self->logmsg('1.11', 'CRITICAL', 'Checksum are not enabled in UXDBDATA %s.', $self->{uxdata});
 		$self->{results}{'1.3.3'} = 'FAILURE';
 	}
 }
@@ -603,23 +603,23 @@ sub check_1_3_4
 
 	my ($major, $minor) = split(/\./, $self->{cluster});
 
-	# Ensure WALs and temporary files are not on the same partition as the PGDATA
-	my $temp_tbsp = `$self->{psql} -Atc "SHOW temp_tablespaces"`;
+	# Ensure WALs and temporary files are not on the same partition as the UXDBDATA
+	my $temp_tbsp = `$self->{uxsql} -Atc "SHOW temp_tablespaces"`;
 	chomp($temp_tbsp);
 
-	my $wal_links = `ls -la "$self->{pgdata}/pg_wal" | grep "^l" | sed 's/.* -> //'`;
+	my $wal_links = `ls -la "$self->{uxdata}/ux_wal" | grep "^l" | sed 's/.* -> //'`;
 	chomp($wal_links);
 
-	# FIXME: We assume that a symlink that doesn't point into the PGDATA
+	# FIXME: We assume that a symlink that doesn't point into the UXDBDATA
 	# which could obviously not be the case.
-	if (!$wal_links || $wal_links !~ m#^/# || $wal_links =~ m#^$self->{pgdata}/#)
+	if (!$wal_links || $wal_links !~ m#^/# || $wal_links =~ m#^$self->{uxdata}/#)
 	{
-		$self->logmsg('1.12', 'WARNING', 'Subdirectory pg_wal is not on a separate partition than the PGDATA %s.');
+		$self->logmsg('1.12', 'WARNING', 'Subdirectory ux_wal is not on a separate partition than the UXDBDATA %s.');
 		$self->{results}{'1.3.4'} = 'FAILURE';
 	}
-	if (!$temp_tbsp || $temp_tbsp !~ m#^/# || $temp_tbsp =~ m#^$self->{pgdata}/#)
+	if (!$temp_tbsp || $temp_tbsp !~ m#^/# || $temp_tbsp =~ m#^$self->{uxdata}/#)
 	{
-		$self->logmsg('1.13', 'WARNING', 'Subdirectory for temporary file is not on a separate partition than the PGDATA.');
+		$self->logmsg('1.13', 'WARNING', 'Subdirectory for temporary file is not on a separate partition than the UXDBDATA.');
 		$self->{results}{'1.3.4'} = 'FAILURE';
 	}
 	if ($self->{results}{'1.3.4'} ne 'FAILURE')
@@ -632,7 +632,7 @@ sub check_1_3_5
 {
 	my $self = shift;
 
-	# Verify manually that the PGDATA is on an encrypted partition
+	# Verify manually that the UXDBDATA is on an encrypted partition
 	my @encrypted = `lsblk -f 2>/dev/null | grep -v "^loop"`;
 	if ($#encrypted < 0) {
 		$self->logmsg('1.14', 'CRITICAL', 'Can not get information about encrypted partition, command lsblk is missing on this host.');
@@ -645,36 +645,36 @@ sub check_1_4
 {
 	my $self = shift;
 
-	# Ensure PostgreSQL versions are up-to-date
-	if ($self->{no_check_pg_version})
+	# Ensure UXDB versions are up-to-date
+	if ($self->{no_check_ux_version})
 	{
-		$self->logmsg('1.15', 'WARNING', 'PostgreSQL version check was disabled (--no-pg-version-check) can not look for minor version upgrade.');
+		$self->logmsg('1.15', 'WARNING', 'UXDB version check was disabled (--no-ux-version-check) can not look for minor version upgrade.');
 		$self->{results}{'1.4'} = 'FAILURE';
 	}
 	else
 	{
-		# Get all PostgreSQL version from
-		my @versions = `curl https://www.postgresql.org/ftp/source/ 2>/dev/null | grep 'href="v' | awk -F '"' '{print \$2}' | grep -E "^v[1-9]"`;
+		# Get all UXDB version from
+		my @versions = `curl https://www.uxsino.com/ftp/source/ 2>/dev/null | grep 'href="v' | awk -F '"' '{print \$2}' | grep -E "^v[1-9]"`;
 		chomp(@versions);
 		map { s/[^\d\.]//g; } @versions;
 		if ($#versions < 0)
 		{
-			$self->logmsg('1.3', 'ERROR', 'No internet access to https://www.postgresql.org/.');
+			$self->logmsg('1.3', 'ERROR', 'No internet access to https://www.uxsino.com/.');
 			$self->{results}{'1.4'} = 'FAILURE';
 			return;
 		}
 
-		my @cur_version = `curl https://www.postgresql.org/ 2>/dev/null | grep 'href="/docs/../release-.*.html">Notes' | awk -F '"' '{print \$4}' | sed 's/.*release-\\(.*\\).html/\\1/' | sed 's/-/\\./' | sort -u`;
+		my @cur_version = `curl https://www.uxsino.com/ 2>/dev/null | grep 'href="/docs/../release-.*.html">Notes' | awk -F '"' '{print \$4}' | sed 's/.*release-\\(.*\\).html/\\1/' | sed 's/-/\\./' | sort -u`;
 		chomp(@cur_version);
 		foreach my $ver (@{ $self->{pkg_ver} })
 		{
 			my ($major, $minor) = split(/\./, $ver);
 			my @cur = grep(/^$major\./, @cur_version);
 			if ($#cur < 0) {
-				$self->logmsg('1.4', 'CRITICAL', 'This PostgreSQL version, v%s, is no more supported.', $ver);
+				$self->logmsg('1.4', 'CRITICAL', 'This UXDB version, v%s, is no more supported.', $ver);
 				$self->{results}{'1.4'} = 'FAILURE';
 			} elsif ($cur[0] > $ver) {
-				$self->logmsg('1.5', 'CRITICAL', 'This PostgreSQL version, v%s, is not the last one of this branch (%s)', $ver, $cur[0]);
+				$self->logmsg('1.5', 'CRITICAL', 'This UXDB version, v%s, is not the last one of this branch (%s)', $ver, $cur[0]);
 				$self->logmsg('1.6', 'INFO', 'See [Why upgrade](https://why-upgrade.depesz.com/show?from=%s&to=%s).', $ver, $cur[0]);
 				$self->{results}{'1.4'} = 'FAILURE';
 			}
@@ -699,7 +699,7 @@ sub check_1_5
 		next if ($#{ $self->{allow} } >= 0 && !grep(/^$db$/i, @{ $self->{allow} }));
 		next if ($#{ $self->{exclude} } >= 0 && grep(/^$db$/i, @{ $self->{exclude} }));
 
-		my @extdef = `$self->{psql} -d $db -Atc "\\dx"`;
+		my @extdef = `$self->{uxsql} -d $db -Atc "\\dx"`;
 		if ($#extdef >= 0)
 		{
 			$self->logmsg('1.5.' . $i, 'head3', $db);
@@ -721,11 +721,11 @@ sub check_1_6
 {
 	my $self = shift;
 
-	my @dest = `ls -la $self->{pgdata}/pg_tblspc/ 2>/dev/null | sed 's/.* -> //'`;
+	my @dest = `ls -la $self->{uxdata}/ux_tblspc/ 2>/dev/null | sed 's/.* -> //'`;
 	chomp(@dest);
 	foreach my $d (@dest)
 	{
-		if ($d =~ m#$self->{pgdata}\/#) {
+		if ($d =~ m#$self->{uxdata}\/#) {
 			$self->logmsg('1.16', 'WARNING', 'Tablespace location %s should not be inside the data directory.', $d);
 			$self->{results}{'1.6'} = 'FAILURE';
 		}
@@ -762,14 +762,14 @@ sub check_2_2
 {
 	my $self = shift;
 
-	# Verify that the PGDATA permissions are correct
+	# Verify that the UXDBDATA permissions are correct
 	my ($major, $minor) = split(/\./, $self->{cluster});
 
-	my $perm = `ls -la "$self->{pgdata}" | grep " \\.\$" | awk '{print \$1}'`;
+	my $perm = `ls -la "$self->{uxdata}" | grep " \\.\$" | awk '{print \$1}'`;
 	chomp($perm);
 	$perm =~ s/\.$//;
 	if ($perm ne 'drwx------') {
-		$self->logmsg('2.2', 'CRITICAL', 'Permissions of the PGDATA (%s) are not secure: %s, must be drwx------.', $self->{pgdata}, $perm);
+		$self->logmsg('2.2', 'CRITICAL', 'Permissions of the UXDBDATA (%s) are not secure: %s, must be drwx------.', $self->{uxdata}, $perm);
 		$self->{results}{'2.2'} = 'FAILURE';
 	}
 	else
@@ -782,11 +782,11 @@ sub check_2_3
 {
 	my $self = shift;
 
-	# Have a look to the PGDATA to check for symlink or unwanted files
+	# Have a look to the UXDBDATA to check for symlink or unwanted files
 	my ($major, $minor) = split(/\./, $self->{cluster});
 
-	my @content = `ls -la "$self->{pgdata}/"`;
-	unshift(@content, "$self->{pgdata}/\n");
+	my @content = `ls -la "$self->{uxdata}/"`;
+	unshift(@content, "$self->{uxdata}/\n");
 	$self->logdata(@content);
 }
 
@@ -794,19 +794,19 @@ sub check_2_4
 {
 	my $self = shift;
 
-	# Verify that the pg_hba.conf file have the right permissions when outside the PGDATA
+	# Verify that the ux_hba.conf file have the right permissions when outside the UXDBDATA
 	my ($major, $minor) = split(/\./, $self->{cluster});
 
-	$self->logmsg('2.4', 'head2', 'Check permissions of pg_hba.conf');
-	my $pg_hba = `$self->{psql} -Atc "SHOW hba_file"`;
-	chomp($pg_hba);
-	$pg_hba = "$self->{pgdata}/$pg_hba" if ($pg_hba !~ m#^/#);
-	my $perm = `ls -la "$pg_hba" | awk '{print \$1}'`;
+	$self->logmsg('2.4', 'head2', 'Check permissions of ux_hba.conf');
+	my $ux_hba = `$self->{uxsql} -Atc "SHOW hba_file"`;
+	chomp($ux_hba);
+	$ux_hba = "$self->{uxdata}/$ux_hba" if ($ux_hba !~ m#^/#);
+	my $perm = `ls -la "$ux_hba" | awk '{print \$1}'`;
 	chomp($perm);
 	$perm =~ s/\.$//;
 	if ($perm ne '-rw-r-----' and $perm ne '-rw-------')
 	{
-		my $parent_dir = $pg_hba;
+		my $parent_dir = $ux_hba;
 		$parent_dir =~ s/\/[^\/]+$//;
 		# check the permission of the parent directory to avoid firing false positive
 		my $dperm = `ls -la "$parent_dir" | grep " \\.\$" | awk '{print \$1}'`;
@@ -814,7 +814,7 @@ sub check_2_4
 		$perm =~ s/\.$//;
 		if ($perm ne 'drwx------')
 		{
-			$self->logmsg('2.4', 'CRITICAL', 'Permissions of the pg_hba.conf file (%s) are not secure: %s, must be -rw-r----- or -rw-------.', $pg_hba, $perm);
+			$self->logmsg('2.4', 'CRITICAL', 'Permissions of the ux_hba.conf file (%s) are not secure: %s, must be -rw-r----- or -rw-------.', $ux_hba, $perm);
 			$self->{results}{'2.4'} = 'FAILURE';
 		}
 	}
@@ -828,7 +828,7 @@ sub check_2_5
 	my $self = shift;
 
 	# Check permissions on Unix Socket
-	my @perm_sock = `$self->{psql} -Atc "SHOW unix_socket_permissions;SHOW unix_socket_directories;SHOW port;"`;
+	my @perm_sock = `$self->{uxsql} -Atc "SHOW unix_socket_permissions;SHOW unix_socket_directories;SHOW port;"`;
 	chomp(@perm_sock);
 	if ($perm_sock[1])
 	{
@@ -875,7 +875,7 @@ sub check_3_1_2
 	my $self = shift;
 
 	# Ensure the log destinations are set correctly
-	$self->{log_destination} = `$self->{psql} -Atc "SHOW log_destination"`;
+	$self->{log_destination} = `$self->{uxsql} -Atc "SHOW log_destination"`;
 	chomp($self->{log_destination});
 	if (!$self->{log_destination}) {
 		$self->logmsg('3.1', 'CRITICAL', 'Setting \'log_destination\' is not set, logging will be lost.');
@@ -892,7 +892,7 @@ sub check_3_1_3
 	my $self = shift;
 
 	# Ensure the logging collector is enabled
-	$self->{log_collector} = `$self->{psql} -Atc "SHOW logging_collector"`;
+	$self->{log_collector} = `$self->{uxsql} -Atc "SHOW logging_collector"`;
 	chomp($self->{log_collector});
 	if ($self->{log_collector} ne 'on' and $self->{log_destination} eq 'syslog') {
 		$self->logmsg('3.2', 'WARNING', 'Setting \'logging_collector\' should be enabled instead of using syslog.');
@@ -916,7 +916,7 @@ sub check_3_1_4
 	# Ensure the log file destination directory is set correctly
 	if ($self->{log_destination} ne 'syslog' && $self->{log_collector} eq 'on')
 	{
-		my $log_dir = `$self->{psql} -Atc "SHOW log_directory"`;
+		my $log_dir = `$self->{uxsql} -Atc "SHOW log_directory"`;
 		chomp($log_dir);
 		if (!$log_dir) {
 			$self->logmsg('3.4', 'CRITICAL', 'Setting \'log_directory\' must be set, currently writes will be done in / and logging will be lost.');
@@ -940,7 +940,7 @@ sub check_3_1_5
 	# Ensure the filename pattern for log files is set correctly
 	if ($self->{log_destination} ne 'syslog' && $self->{log_collector} eq 'on')
 	{
-		my $log_filename = `$self->{psql} -Atc "SHOW log_filename"`;
+		my $log_filename = `$self->{uxsql} -Atc "SHOW log_filename"`;
 		chomp($log_filename);
 		if (!$log_filename) {
 			$self->logmsg('3.5', 'CRITICAL', 'Setting \'log_filename\' must be set, currently logging will be lost.');
@@ -961,7 +961,7 @@ sub check_3_1_6
 	# Ensure the log file permissions are set correctly
 	if ($self->{log_destination} ne 'syslog' && $self->{log_collector} eq 'on')
 	{
-		my $log_mode = `$self->{psql} -Atc "SHOW log_file_mode"`;
+		my $log_mode = `$self->{uxsql} -Atc "SHOW log_file_mode"`;
 		chomp($log_mode);
 		if ($log_mode ne '0600') {
 			$self->logmsg('3.6', 'WARNING', 'Setting \'log_file_mode\' should be set to \'0600\', current value is %s.', $log_mode);
@@ -985,7 +985,7 @@ sub check_3_1_7
 	# Ensure 'log_truncate_on_rotation' is enabled
 	if ($self->{log_destination} ne 'syslog' && $self->{log_collector} eq 'on')
 	{
-		my $log_truncate = `$self->{psql} -Atc "SHOW log_truncate_on_rotation"`;
+		my $log_truncate = `$self->{uxsql} -Atc "SHOW log_truncate_on_rotation"`;
 		chomp($log_truncate);
 		if ($log_truncate ne 'on') {
 			$self->logmsg('3.7', 'WARNING', 'Setting \'log_truncate_on_rotation\' should be enabled.');
@@ -1009,7 +1009,7 @@ sub check_3_1_8
 	# Ensure the maximum log file lifetime is set correctly
 	if ($self->{log_destination} ne 'syslog' && $self->{log_collector} eq 'on')
 	{
-		my $log_age = `$self->{psql} -Atc "SHOW log_rotation_age"`;
+		my $log_age = `$self->{uxsql} -Atc "SHOW log_rotation_age"`;
 		chomp($log_age);
 		$self->logdata("log_rotation_age = '" . $log_age . "' # Please check with your security policy");
 	}
@@ -1026,7 +1026,7 @@ sub check_3_1_9
 	# Ensure the maximum log file size is set correctly
 	if ($self->{log_destination} ne 'syslog' && $self->{log_collector} eq 'on')
 	{
-		my $log_size = `$self->{psql} -Atc "SHOW log_rotation_size"`;
+		my $log_size = `$self->{uxsql} -Atc "SHOW log_rotation_size"`;
 		chomp($log_size);
 		$self->logdata("log_rotation_size = '" . $log_size . "' # Please check with your security policy");
 	}
@@ -1043,7 +1043,7 @@ sub check_3_1_10
 	# Ensure the correct syslog facility is selected (Manual)
 	if ($self->{log_destination} eq 'syslog')
 	{
-		my $log_facility = `$self->{psql} -Atc "SHOW syslog_facility"`;
+		my $log_facility = `$self->{uxsql} -Atc "SHOW syslog_facility"`;
 		chomp($log_facility);
 		$self->logdata("syslog_facility = '" . $log_facility . "' # Please check with your security policy");
 	}
@@ -1060,7 +1060,7 @@ sub check_3_1_11
 	# Ensure syslog messages are not suppressed
 	if ($self->{log_destination} eq 'syslog')
 	{
-		my $log_seq = `$self->{psql} -Atc "SHOW syslog_sequence_numbers"`;
+		my $log_seq = `$self->{uxsql} -Atc "SHOW syslog_sequence_numbers"`;
 		chomp($log_seq);
 		if ($log_seq ne 'on') {
 			$self->logmsg('3.11', 'WARNING', 'Setting \'syslog_sequence_numbers\' should be enabled, some messages can be lost.');
@@ -1084,7 +1084,7 @@ sub check_3_1_12
 	# Ensure syslog messages are not lost due to size
 	if ($self->{log_destination} eq 'syslog')
 	{
-		my $log_split = `$self->{psql} -Atc "SHOW syslog_split_messages"`;
+		my $log_split = `$self->{uxsql} -Atc "SHOW syslog_split_messages"`;
 		chomp($log_split);
 		if ($log_split ne 'on') {
 			$self->logmsg('3.12', 'WARNING', 'Setting \'syslog_split_messages\' should be enabled, some messages can be truncated.');
@@ -1105,10 +1105,10 @@ sub check_3_1_13
 {
 	my $self = shift;
 
-	# Ensure the program name for PostgreSQL syslog messages is correct
+	# Ensure the program name for UXDB syslog messages is correct
 	if ($self->{log_destination} eq 'syslog')
 	{
-		my $log_ident = `$self->{psql} -Atc "SHOW syslog_ident"`;
+		my $log_ident = `$self->{uxsql} -Atc "SHOW syslog_ident"`;
 		chomp($log_ident);
 		$self->logdata("syslog_ident = '" . $log_ident . "' # Please check with your security policy");
 	}
@@ -1123,7 +1123,7 @@ sub check_3_1_14
 	my $self = shift;
 
 	# Ensure the correct messages are written to the server log
-	my $log_min_messages = `$self->{psql} -Atc "SHOW log_min_messages"`;
+	my $log_min_messages = `$self->{uxsql} -Atc "SHOW log_min_messages"`;
 	chomp($log_min_messages);
 	if ($log_min_messages ne 'warning') {
 		$self->logmsg('3.14', 'WARNING', 'Setting \'log_min_messages\' should be set to \'warning\' to avoid tracing too many or too few messages.');
@@ -1140,7 +1140,7 @@ sub check_3_1_15
 	my $self = shift;
 
 	# Ensure the correct SQL statements generating errors are recorded
-	my $log_min_error_statement = `$self->{psql} -Atc "SHOW log_min_error_statement"`;
+	my $log_min_error_statement = `$self->{uxsql} -Atc "SHOW log_min_error_statement"`;
 	chomp($log_min_error_statement);
 	if ($log_min_error_statement ne 'error') {
 		$self->logmsg('3.15', 'WARNING', 'Setting \'log_min_error_statement\' should be set to \'error\' to avoid tracing too many or too few messages.');
@@ -1157,7 +1157,7 @@ sub check_3_1_16
 	my $self = shift;
 
 	$self->logmsg('3.1.16', 'head3', 'Ensure \'debug_print_parse\' is disabled');
-	my $debug_print_parse = `$self->{psql} -Atc "SHOW debug_print_parse"`;
+	my $debug_print_parse = `$self->{uxsql} -Atc "SHOW debug_print_parse"`;
 	chomp($debug_print_parse);
 	if ($debug_print_parse ne 'off') {
 		$self->logmsg('3.16', 'WARNING', 'Setting \'debug_print_parse\' should be disabled.');
@@ -1174,7 +1174,7 @@ sub check_3_1_17
 	my $self = shift;
 
 	# Ensure 'debug_print_rewritten' is disabled
-	my $debug_print_rewritten = `$self->{psql} -Atc "SHOW debug_print_rewritten"`;
+	my $debug_print_rewritten = `$self->{uxsql} -Atc "SHOW debug_print_rewritten"`;
 	chomp($debug_print_rewritten);
 	if ($debug_print_rewritten ne 'off') {
 		$self->logmsg('3.17', 'WARNING', 'Setting \'debug_print_rewritten\' should be disabled.');
@@ -1191,7 +1191,7 @@ sub check_3_1_18
 	my $self = shift;
 
 	# Ensure 'debug_print_plan' is disabled
-	my $debug_print_plan = `$self->{psql} -Atc "SHOW debug_print_plan"`;
+	my $debug_print_plan = `$self->{uxsql} -Atc "SHOW debug_print_plan"`;
 	chomp($debug_print_plan);
 	if ($debug_print_plan ne 'off') {
 		$self->logmsg('3.18', 'WARNING', 'Setting \'debug_print_plan\' should be disabled.');
@@ -1208,7 +1208,7 @@ sub check_3_1_19
 	my $self = shift;
 
 	# Ensure 'debug_pretty_print' is enabled
-	my $debug_pretty_print = `$self->{psql} -Atc "SHOW debug_pretty_print"`;
+	my $debug_pretty_print = `$self->{uxsql} -Atc "SHOW debug_pretty_print"`;
 	chomp($debug_pretty_print);
 	if ($debug_pretty_print eq 'off') {
 		$self->logmsg('3.19', 'WARNING', 'Setting \'debug_pretty_print\' should be enabled.');
@@ -1225,7 +1225,7 @@ sub check_3_1_20
 	my $self = shift;
 
 	# Ensure 'log_connections' is enabled
-	my $log_connections = `$self->{psql} -Atc "SHOW log_connections"`;
+	my $log_connections = `$self->{uxsql} -Atc "SHOW log_connections"`;
 	chomp($log_connections);
 	if ($log_connections eq 'off') {
 		$self->logmsg('3.20', 'WARNING', 'Setting \'log_connections\' should be enabled.');
@@ -1242,7 +1242,7 @@ sub check_3_1_21
 	my $self = shift;
 
 	# Ensure 'log_disconnections' is enabled
-	my $log_disconnections = `$self->{psql} -Atc "SHOW log_disconnections"`;
+	my $log_disconnections = `$self->{uxsql} -Atc "SHOW log_disconnections"`;
 	chomp($log_disconnections);
 	if ($log_disconnections eq 'off') {
 		$self->logmsg('3.21', 'WARNING', 'Setting \'log_disconnections\' should be enabled.');
@@ -1259,7 +1259,7 @@ sub check_3_1_22
 	my $self = shift;
 
 	# Ensure 'log_error_verbosity' is set correctly
-	my $log_error_verbosity = `$self->{psql} -Atc "SHOW log_error_verbosity"`;
+	my $log_error_verbosity = `$self->{uxsql} -Atc "SHOW log_error_verbosity"`;
 	chomp($log_error_verbosity);
 	if ($log_error_verbosity ne 'verbose') {
 		$self->logmsg('3.22', 'WARNING', 'Setting \'log_error_verbosity\' should be set to \'verbose\'.');
@@ -1276,7 +1276,7 @@ sub check_3_1_23
 	my $self = shift;
 
 	# Ensure 'log_hostname' is set correctly
-	my $log_hostname = `$self->{psql} -Atc "SHOW log_hostname"`;
+	my $log_hostname = `$self->{uxsql} -Atc "SHOW log_hostname"`;
 	chomp($log_hostname);
 	if ($log_hostname ne 'off') {
 		$self->logmsg('3.23', 'WARNING', 'Setting \'log_hostname\' should be disabled.');
@@ -1293,7 +1293,7 @@ sub check_3_1_24
 	my $self = shift;
 
 	# Ensure 'log_line_prefix' is set correctly
-	my $log_line_prefix = `$self->{psql} -Atc "SHOW log_line_prefix"`;
+	my $log_line_prefix = `$self->{uxsql} -Atc "SHOW log_line_prefix"`;
 	chomp($log_line_prefix);
 	if ($self->{log_destination} ne 'syslog')
 	{
@@ -1322,7 +1322,7 @@ sub check_3_1_25
 	my $self = shift;
 
 	# Ensure 'log_statement' is set correctly
-	my $log_statement = `$self->{psql} -Atc "SHOW log_statement"`;
+	my $log_statement = `$self->{uxsql} -Atc "SHOW log_statement"`;
 	chomp($log_statement);
 	if ($log_statement eq 'none') {
 		$self->logmsg('3.25', 'WARNING', 'Setting \'log_statement\' should at least be set to \'ddl\'.');
@@ -1339,7 +1339,7 @@ sub check_3_1_26
 	my $self = shift;
 
 	# Ensure 'log_timezone' is set correctly
-	my $log_timezone = `$self->{psql} -Atc "SHOW log_timezone"`;
+	my $log_timezone = `$self->{uxsql} -Atc "SHOW log_timezone"`;
 	chomp($log_timezone);
 	if (!grep(/^$log_timezone$/i, 'GMT', 'UTC')) {
 		$self->logmsg('3.26', 'WARNING', 'Setting \'log_timezone\' should be set to \'GMT\' or \'UTC\'.');
@@ -1355,13 +1355,13 @@ sub check_3_1_27
 {
 	my $self = shift;
 
-	# Ensure that log_directory is outside the PGDATA
+	# Ensure that log_directory is outside the UXDBDATA
 	if ($self->{log_destination} ne 'syslog' and $self->{log_collector} eq 'on')
 	{
-		my $log_dir = `$self->{psql} -Atc "SHOW log_directory"`;
+		my $log_dir = `$self->{uxsql} -Atc "SHOW log_directory"`;
 		chomp($log_dir);
-		if ($log_dir !~ m#^/# or $log_dir =~ m#^$self->{pgdata}/#) {
-			$self->logmsg('3.4', 'WARNING', 'Setting \'log_directory\' should use a location that is not in the PGDATA.');
+		if ($log_dir !~ m#^/# or $log_dir =~ m#^$self->{uxdata}/#) {
+			$self->logmsg('3.4', 'WARNING', 'Setting \'log_directory\' should use a location that is not in the UXDBDATA.');
 			$self->{results}{'3.1.27'} = 'FAILURE';
 		}
 		else
@@ -1379,19 +1379,19 @@ sub check_3_2
 {
 	my $self = shift;
 
-	# Ensure the PostgreSQL Audit Extension (pgAudit) is enabled
-	my $pgaudit = `$self->{psql} -Atc "SHOW shared_preload_libraries;"`;
-	chomp($pgaudit);
-	if ($pgaudit !~ m#pgaudit#) {
-		$self->logmsg('3.28', 'WARNING', 'PostgreSQL extension pgAudit should be used.');
+	# Ensure the UXDB Audit Extension (uxAudit) is enabled
+	my $uxaudit = `$self->{uxsql} -Atc "SHOW shared_preload_libraries;"`;
+	chomp($uxaudit);
+	if ($uxaudit !~ m#uxaudit#) {
+		$self->logmsg('3.28', 'WARNING', 'UXDB extension uxAudit should be used.');
 		$self->{results}{'3.1.28'} = 'FAILURE';
 	}
 	else
 	{
-		my $pgaudit_conf = `$self->{psql} -Atc "SHOW pgaudit.log;"`;
-		chomp($pgaudit_conf);
-		if ($pgaudit_conf !~ /ddl/ || $pgaudit_conf !~ /write/) {
-			$self->logmsg('3.29', 'WARNING', 'PostgreSQL extension pgAudit is not well configured, \'pgaudit.log\' setting shoud contain \'ddl\' and \'write\'.');
+		my $uxaudit_conf = `$self->{uxsql} -Atc "SHOW uxaudit.log;"`;
+		chomp($uxaudit_conf);
+		if ($uxaudit_conf !~ /ddl/ || $uxaudit_conf !~ /write/) {
+			$self->logmsg('3.29', 'WARNING', 'UXDB extension uxAudit is not well configured, \'uxaudit.log\' setting shoud contain \'ddl\' and \'write\'.');
 			$self->{results}{'3.1.29'} = 'FAILURE';
 		}
 		else
@@ -1416,11 +1416,11 @@ sub check_4_2
 	my $self = shift;
 
 	# Ensure excessive administrative privileges are revoked
-	my @tmp = `$self->{psql} -Atc "\\du+"`;
+	my @tmp = `$self->{uxsql} -Atc "\\du+"`;
 	@{$self->{superusers}} = grep(/superuser/i, @tmp);
 	if ($#{$self->{superusers}} > 0)
 	{
-		$self->logmsg('4.2', 'WARNING', 'There are more than one PostgreSQL superuser.');
+		$self->logmsg('4.2', 'WARNING', 'There are more than one UXDB superuser.');
 		$self->{results}{'4.2'} = 'FAILURE';
 	}
 	unshift(@{$self->{superusers}}, "Role|Attributs|Description\n");
@@ -1441,7 +1441,7 @@ sub check_4_3
 		next if ($#{ $self->{allow} } >= 0 && !grep(/^$db$/i, @{ $self->{allow} }));
 		next if ($#{ $self->{exclude} } >= 0 && grep(/^$db$/i, @{ $self->{exclude} }));
 
-		my @secdef = `$self->{psql} -d $db -Atc "SELECT p.oid, nspname, proname, rolname, prosecdef, proconfig, proacl FROM pg_proc p JOIN pg_namespace n ON p.pronamespace = n.oid JOIN pg_authid a ON a.oid = p.proowner WHERE proname NOT LIKE 'pgaudit%' AND (prosecdef OR NOT proconfig IS NULL) AND NOT EXISTS (SELECT 1 FROM pg_catalog.pg_depend d WHERE d.refclassid = 'pg_catalog.pg_extension'::pg_catalog.regclass AND d.objid = p.oid AND d.deptype = 'e');"`;
+		my @secdef = `$self->{uxsql} -d $db -Atc "SELECT p.oid, nspname, proname, rolname, prosecdef, proconfig, proacl FROM ux_proc p JOIN ux_namespace n ON p.pronamespace = n.oid JOIN ux_authid a ON a.oid = p.proowner WHERE proname NOT LIKE 'uxaudit%' AND (prosecdef OR NOT proconfig IS NULL) AND NOT EXISTS (SELECT 1 FROM ux_catalog.ux_depend d WHERE d.refclassid = 'ux_catalog.ux_extension'::ux_catalog.regclass AND d.objid = p.oid AND d.deptype = 'e');"`;
 		if ($#secdef >= 0)
 		{
 			$self->logmsg('4.3.' . $i, 'head3', $db);
@@ -1472,12 +1472,12 @@ sub check_4_4
 		next if ($#{ $self->{allow} } >= 0 && !grep(/^$db$/i, @{ $self->{allow} }));
 		next if ($#{ $self->{exclude} } >= 0 && grep(/^$db$/i, @{ $self->{exclude} }));
 
-		my @secdef = `$self->{psql} -d $db -Atc "SELECT t.schemaname, t.tablename, u.usename,
+		my @secdef = `$self->{uxsql} -d $db -Atc "SELECT t.schemaname, t.tablename, u.usename,
 has_table_privilege(u.usename, '\\"'||t.schemaname||'\\".\\"'||t.tablename||'\\"', 'select') as select,
 has_table_privilege(u.usename, '\\"'||t.schemaname||'\\".\\"'||t.tablename||'\\"', 'insert') as insert,
 has_table_privilege(u.usename, '\\"'||t.schemaname||'\\".\\"'||t.tablename||'\\"', 'update') as update,
 has_table_privilege(u.usename, '\\"'||t.schemaname||'\\".\\"'||t.tablename||'\\"', 'delete') as delete
-FROM pg_tables t, pg_user u WHERE t.schemaname NOT IN ('information_schema','pg_catalog') AND (
+FROM ux_tables t, ux_user u WHERE t.schemaname NOT IN ('information_schema','ux_catalog') AND (
 has_table_privilege(u.usename, '\\"'||t.schemaname||'\\".\\"'||t.tablename||'\\"', 'select') OR
 has_table_privilege(u.usename, '\\"'||t.schemaname||'\\".\\"'||t.tablename||'\\"', 'insert') OR
 has_table_privilege(u.usename, '\\"'||t.schemaname||'\\".\\"'||t.tablename||'\\"', 'update') OR
@@ -1508,7 +1508,7 @@ sub check_4_5
 	my @bypassrls = grep(!/Superuser/, grep(/Bypass RLS/i, @{$self->{dbs}}));
 	if ($#bypassrls > 0)
 	{
-		$self->logmsg('4.5', 'WARNING', 'Some PostgreSQL user have Bypass RLS enabled.');
+		$self->logmsg('4.5', 'WARNING', 'Some UXDB user have Bypass RLS enabled.');
 		$self->{results}{'4.5'} = 'FAILURE';
 		$self->logdata(@bypassrls);
 	}
@@ -1525,7 +1525,7 @@ sub check_4_5
 		next if ($#{ $self->{allow} } >= 0 && !grep(/^$db$/i, @{ $self->{allow} }));
 		next if ($#{ $self->{exclude} } >= 0 && grep(/^$db$/i, @{ $self->{exclude} }));
 
-		my @rls = `$self->{psql} -d $db -Atc "SELECT oid, relname, relrowsecurity FROM pg_class WHERE relrowsecurity IS TRUE;"`;
+		my @rls = `$self->{uxsql} -d $db -Atc "SELECT oid, relname, relrowsecurity FROM ux_class WHERE relrowsecurity IS TRUE;"`;
 		if ($#rls >= 0)
 		{
 			$self->logmsg('4.5.' . $i, 'head3', $db);
@@ -1548,10 +1548,10 @@ sub check_4_6
 	my $self = shift;
 
 	# Ensure the set_user extension is installed
-	my $set_user = `$self->{psql} -Atc "SHOW shared_preload_libraries;"`;
+	my $set_user = `$self->{uxsql} -Atc "SHOW shared_preload_libraries;"`;
 	chomp($set_user);
 	if ($set_user !~ m#set_user#) {
-		$self->logmsg('4.6', 'WARNING', 'PostgreSQL extension set_user should be used.');
+		$self->logmsg('4.6', 'WARNING', 'UXDB extension set_user should be used.');
 		$self->{results}{'4.6'} = 'FAILURE';
 	}
 	else
@@ -1559,11 +1559,11 @@ sub check_4_6
 		$self->logmsg('0.1', 'SUCCESS', 'Test passed');
 	}
 
-	#  Create the pgdsat_roletree audit view
-	`$self->{psql} -Atc "DROP VIEW IF EXISTS pgdsat_roletree;" 2>/dev/null`;
-	`$self->{psql} -Atc "CREATE OR REPLACE VIEW pgdsat_roletree AS WITH RECURSIVE roltree AS ( SELECT u.rolname AS rolname, u.oid AS roloid, u.rolcanlogin, u.rolsuper, '{}'::name[] AS rolparents, NULL::oid AS parent_roloid, NULL::name AS parent_rolname FROM pg_catalog.pg_authid u LEFT JOIN pg_catalog.pg_auth_members m on u.oid = m.member LEFT JOIN pg_catalog.pg_authid g on m.roleid = g.oid WHERE g.oid IS NULL UNION ALL SELECT u.rolname AS rolname, u.oid AS roloid, u.rolcanlogin, u.rolsuper, t.rolparents || g.rolname AS rolparents, g.oid AS parent_roloid, g.rolname AS parent_rolname FROM pg_catalog.pg_authid u JOIN pg_catalog.pg_auth_members m on u.oid = m.member JOIN pg_catalog.pg_authid g on m.roleid = g.oid JOIN roltree t on t.roloid = g.oid) SELECT r.rolname, r.roloid, r.rolcanlogin, r.rolsuper, r.rolparents FROM roltree r ORDER BY 1;"`;
+	#  Create the uxdbsat_roletree audit view
+	`$self->{uxsql} -Atc "DROP VIEW IF EXISTS uxdbsat_roletree;" 2>/dev/null`;
+	`$self->{uxsql} -Atc "CREATE OR REPLACE VIEW uxdbsat_roletree AS WITH RECURSIVE roltree AS ( SELECT u.rolname AS rolname, u.oid AS roloid, u.rolcanlogin, u.rolsuper, '{}'::name[] AS rolparents, NULL::oid AS parent_roloid, NULL::name AS parent_rolname FROM ux_catalog.ux_authid u LEFT JOIN ux_catalog.ux_auth_members m on u.oid = m.member LEFT JOIN ux_catalog.ux_authid g on m.roleid = g.oid WHERE g.oid IS NULL UNION ALL SELECT u.rolname AS rolname, u.oid AS roloid, u.rolcanlogin, u.rolsuper, t.rolparents || g.rolname AS rolparents, g.oid AS parent_roloid, g.rolname AS parent_rolname FROM ux_catalog.ux_authid u JOIN ux_catalog.ux_auth_members m on u.oid = m.member JOIN ux_catalog.ux_authid g on m.roleid = g.oid JOIN roltree t on t.roloid = g.oid) SELECT r.rolname, r.roloid, r.rolcanlogin, r.rolsuper, r.rolparents FROM roltree r ORDER BY 1;"`;
 	# Verify there are no unexpected unprivileged roles that can login directly
-	my @canlogin = `$self->{psql} -Atc "SELECT ro.rolname, ro.roloid, ro.rolcanlogin, ro.rolsuper, ro.rolparents FROM pgdsat_roletree ro WHERE (ro.rolcanlogin AND ro.rolsuper) OR ( ro.rolcanlogin AND EXISTS ( SELECT TRUE FROM pgdsat_roletree ri WHERE ri.rolname = ANY (ro.rolparents) AND ri.rolsuper)) ORDER BY 1;"`;
+	my @canlogin = `$self->{uxsql} -Atc "SELECT ro.rolname, ro.roloid, ro.rolcanlogin, ro.rolsuper, ro.rolparents FROM uxdbsat_roletree ro WHERE (ro.rolcanlogin AND ro.rolsuper) OR ( ro.rolcanlogin AND EXISTS ( SELECT TRUE FROM uxdbsat_roletree ri WHERE ri.rolname = ANY (ro.rolparents) AND ri.rolsuper)) ORDER BY 1;"`;
 	unshift(@canlogin, join('|', qw/rolname roloid rolcanlogin rolsuper rolparents/) . "\n");
 	$self->logdata(@canlogin);
 }
@@ -1573,12 +1573,12 @@ sub check_4_7
 	my $self = shift;
 
 	# Make use of predefined roles
-	my @pgrole = `$self->{psql} -Atc "SELECT r.rolname, r.roloid, r.rolcanlogin, r.rolsuper, r.rolparents FROM pgdsat_roletree r WHERE r.rolparents::text ~ 'pg_*' ORDER BY 1;"`;
+	my @pgrole = `$self->{uxsql} -Atc "SELECT r.rolname, r.roloid, r.rolcanlogin, r.rolsuper, r.rolparents FROM uxdbsat_roletree r WHERE r.rolparents::text ~ 'ux_*' ORDER BY 1;"`;
 	unshift(@pgrole, join('|', qw/rolname roloid rolcanlogin rolsuper rolparents/) . "\n");
 	$self->logdata(@pgrole);
 
 	# Drop our audit view
-	`$self->{psql} -Atc "DROP VIEW pgdsat_roletree;"`;
+	`$self->{uxsql} -Atc "DROP VIEW uxdbsat_roletree;"`;
 }
 
 sub check_4_8
@@ -1595,7 +1595,7 @@ sub check_4_8
 		next if ($#{ $self->{allow} } >= 0 && !grep(/^$db$/i, @{ $self->{allow} }));
 		next if ($#{ $self->{exclude} } >= 0 && grep(/^$db$/i, @{ $self->{exclude} }));
 
-		my @public = `$self->{psql} -d $db -Atc "SELECT nspname, nspowner, nspacl FROM pg_catalog.pg_namespace WHERE nspname='public';"`;
+		my @public = `$self->{uxsql} -d $db -Atc "SELECT nspname, nspowner, nspacl FROM ux_catalog.ux_namespace WHERE nspname='public';"`;
 		if ($public[0] =~ m#,=U[C]?/#s)
 		{
 			$self->logmsg('4.8.' . $i, 'head3', $db);
@@ -1629,15 +1629,15 @@ sub check_5_1
 	my $self = shift;
 
 	# Ensure login via "local" UNIX Domain Socket is configured correctly
-	my $hba_file = `$self->{psql} -Atc "SHOW hba_file;"`;
+	my $hba_file = `$self->{uxsql} -Atc "SHOW hba_file;"`;
 	chomp($hba_file);
 	if (!$hba_file || !-e $hba_file) {
-		$self->logmsg('5.1', 'CRITICAL', 'Can not find pg_hba.conf file "%s".', $hba_file);
+		$self->logmsg('5.1', 'CRITICAL', 'Can not find ux_hba.conf file "%s".', $hba_file);
 		$self->{results}{'5.1'} = 'FAILURE';
 		return 0;
 	}
 
-	@{$self->{hba_entries}} = $self->load_pg_hba_file($hba_file);
+	@{$self->{hba_entries}} = $self->load_ux_hba_file($hba_file);
 
 	my $num_err = 0;
 	foreach my $hba_entry (@{$self->{hba_entries}})
@@ -1674,11 +1674,11 @@ sub check_5_3
 	# Only useful if the authentication method is md5 or scram
 	if ($self->{use_pwd_enforcement})
 	{
-		my @auth_lib = `$self->{psql} -Atc "select setting from pg_settings where name like '%_preload_libraries' and setting != ''"`;
+		my @auth_lib = `$self->{uxsql} -Atc "select setting from ux_settings where name like '%_preload_libraries' and setting != ''"`;
 		chomp(@auth_lib);
 
 		if (!grep(/(credcheck|passwordcheck)/, @auth_lib)) {
-			$self->logmsg('5.8', 'CRITICAL', "no password difficulty enforcement library used. Consider using the credcheck or passwordcheck PostgreSQL extension.");
+			$self->logmsg('5.8', 'CRITICAL', "no password difficulty enforcement library used. Consider using the credcheck or passwordcheck UXDB extension.");
 			$self->{results}{'5.3'} = 'FAILURE';
 		}
 		else
@@ -1696,7 +1696,7 @@ sub check_5_4
 	# Ensure authentication timeout and delay are well configured
 
 	# Check timeout in the authentication process.
-	my $auth_timeout = `$self->{psql} -Atc "select setting from pg_settings where name='authentication_timeout'"`;
+	my $auth_timeout = `$self->{uxsql} -Atc "select setting from ux_settings where name='authentication_timeout'"`;
 	chomp($auth_timeout);
 	if ($auth_timeout > 60) {
 		$self->logmsg('5.9', 'WARNING', "setting 'authentication_timeout' should be <= 60s.");
@@ -1704,10 +1704,10 @@ sub check_5_4
 	}
 	# Search if an auth delay is set, auth_delay causes the server
 	# to pause briefly before reporting authentication failure
-	my @auth_delay = `$self->{psql} -Atc "SHOW auth_delay.milliseconds; SHOW credcheck.auth_delay_ms;" 2>/dev/null`;
+	my @auth_delay = `$self->{uxsql} -Atc "SHOW auth_delay.milliseconds; SHOW credcheck.auth_delay_ms;" 2>/dev/null`;
 	chomp(@auth_delay);
 	if (!grep(/\d+/, @auth_delay)) {
-		$self->logmsg('5.10', 'WARNING', 'you should add an authentication failure delay to prevent brute force attack. See PostgreSQL extension credcheck or auth_delay.');
+		$self->logmsg('5.10', 'WARNING', 'you should add an authentication failure delay to prevent brute force attack. See UXDB extension credcheck or auth_delay.');
 		$self->{results}{'5.4'} = 'FAILURE';
 	}
 	if ($self->{results}{'5.4'} ne 'FAILURE')
@@ -1732,7 +1732,7 @@ sub check_5_5
 	# Show SSL warning if any
 	if ($#ssl_msg >= 0)
 	{
-		$self->logmsg('5.11', 'WARNING', 'The use of the "host" connection type should be rejected when "hostssl" or "hostgssenc" is used. See line(s) %s in pg_hba.conf.',  join(', ', @ssl_msg));
+		$self->logmsg('5.11', 'WARNING', 'The use of the "host" connection type should be rejected when "hostssl" or "hostgssenc" is used. See line(s) %s in ux_hba.conf.',  join(', ', @ssl_msg));
 		$self->{results}{'5.5'} = 'FAILURE';
 	}
 	elsif (!$self->{use_ssl} && !$self->{use_gssenc} && $self->{use_host})
@@ -1796,7 +1796,7 @@ sub check_5_9
 	my $self = shift;
 
 	# Ensure that \'password_encryption\' is correctly set
-	my $pwd_enc_type = `$self->{psql} -Atc "SHOW password_encryption;"`;
+	my $pwd_enc_type = `$self->{uxsql} -Atc "SHOW password_encryption;"`;
 	chomp($pwd_enc_type);
 	if ($pwd_enc_type ne 'scram-sha-256') {
 		$self->logmsg('5.17', 'CRITICAL', 'parameter \'password_encryption\' should be set to \'scram-sha-256\', not \'%s\'.', $pwd_enc_type);
@@ -1961,7 +1961,7 @@ sub check_6_2
 	my $self = shift;
 
 	# Ensure 'backend' runtime parameters are configured correctly
-	my @ret = `$self->{psql} -Atc "SELECT name, setting FROM pg_settings WHERE context IN ('backend','superuser-backend') ORDER BY 1;"`;
+	my @ret = `$self->{uxsql} -Atc "SELECT name, setting FROM ux_settings WHERE context IN ('backend','superuser-backend') ORDER BY 1;"`;
 	chomp(@ret);
 	my %backend_settings =();
 	foreach my $s (@ret)
@@ -2002,7 +2002,7 @@ sub check_6_3
 	my $self = shift;
 
 	# Ensure 'Postmaster' runtime parameters are configured correctly
-	my @ret = `$self->{psql} -Atc "SELECT name, setting FROM pg_settings WHERE context = 'postmaster' ORDER BY 1;"`;
+	my @ret = `$self->{uxsql} -Atc "SELECT name, setting FROM ux_settings WHERE context = 'postmaster' ORDER BY 1;"`;
 	unshift(@ret, "name|setting\n");
 	$self->logdata(@ret);
 }
@@ -2012,7 +2012,7 @@ sub check_6_4
 	my $self = shift;
 
 	# Ensure 'SIGHUP' runtime parameters are configured correctly
-	my @ret = `$self->{psql} -Atc "SELECT name, setting FROM pg_settings WHERE context = 'sighup' ORDER BY 1;"`;
+	my @ret = `$self->{uxsql} -Atc "SELECT name, setting FROM ux_settings WHERE context = 'sighup' ORDER BY 1;"`;
 	unshift(@ret, "name|setting\n");
 	$self->logdata(@ret);
 }
@@ -2022,7 +2022,7 @@ sub check_6_5
 	my $self = shift;
 
 	# Ensure 'Superser' runtime parameters are configured correctly
-	my @ret = `$self->{psql} -Atc "SELECT name, setting FROM pg_settings WHERE context = 'superuser' ORDER BY 1;"`;
+	my @ret = `$self->{uxsql} -Atc "SELECT name, setting FROM ux_settings WHERE context = 'superuser' ORDER BY 1;"`;
 	unshift(@ret, "name|setting\n");
 	$self->logdata(@ret);
 }
@@ -2032,7 +2032,7 @@ sub check_6_6
 	my $self = shift;
 
 	# Ensure 'User' runtime parameters are configured correctly
-	my @ret = `$self->{psql} -Atc "SELECT name, setting FROM pg_settings WHERE context = 'user' ORDER BY 1;"`;
+	my @ret = `$self->{uxsql} -Atc "SELECT name, setting FROM ux_settings WHERE context = 'user' ORDER BY 1;"`;
 	unshift(@ret, "name|setting\n");
 	$self->logdata(@ret);
 }
@@ -2063,7 +2063,7 @@ sub check_6_8
 	my $self = shift;
 
 	# Ensure TLS is enabled and configured correctly
-	my $ssl = `$self->{psql} -Atc "SHOW ssl;"`;
+	my $ssl = `$self->{uxsql} -Atc "SHOW ssl;"`;
 	chomp($ssl);
 	if ($ssl ne 'on') {
 		$self->logmsg('6.7', 'CRITICAL', 'TLS is not enabled. Setting \'ssl\' should be activated.');
@@ -2071,14 +2071,14 @@ sub check_6_8
 	}
 	else
 	{
-		my $ssl_ver = `$self->{psql} -Atc "select setting from pg_settings where name='ssl_min_protocol_version'"`;
+		my $ssl_ver = `$self->{uxsql} -Atc "select setting from ux_settings where name='ssl_min_protocol_version'"`;
 		chomp($ssl_ver);
 		$ssl_ver =~ s/[^0-9\.]+//g;
 		if ($ssl_ver < 1.3) {
 			$self->logmsg('6.8', 'WARNING', 'Setting \'ssl_min_protocol_version\' should be TLS v1.3 or newer.');
 			$self->{results}{'6.8'} = 'FAILURE';
 		}
-		my $ssl_passphrase = `$self->{psql} -Atc "select setting from pg_settings where name='ssl_passphrase_command'"`;
+		my $ssl_passphrase = `$self->{uxsql} -Atc "select setting from ux_settings where name='ssl_passphrase_command'"`;
 		chomp($ssl_passphrase);
 		if (!$ssl_passphrase) {
 			$self->logmsg('6.9', 'WARNING', 'The SSL certificate should have a passphrase and setting \'ssl_passphrase_command\' should be set.');
@@ -2087,7 +2087,7 @@ sub check_6_8
 
 		if (!$self->{use_ssl} && !$self->{use_gssenc})
 		{
-			$self->logmsg('6.10', 'CRITICAL', 'To enforce TLS authentication for the server, appropriate "hostssl" or "hostgssenc" records must be added to the pg_hba.conf file and "host" connections rejected.');
+			$self->logmsg('6.10', 'CRITICAL', 'To enforce TLS authentication for the server, appropriate "hostssl" or "hostgssenc" records must be added to the ux_hba.conf file and "host" connections rejected.');
 			$self->{results}{'6.8'} = 'FAILURE';
 		}
 	}
@@ -2102,10 +2102,10 @@ sub check_6_9
 	my $self = shift;
 
 	# Ensure a cryptographic extension is installed
-	my @has_crypto = `$self->{psql} -Atc "select * from pg_available_extensions where name='pgcrypto' or name='pgsodium'"`;
+	my @has_crypto = `$self->{uxsql} -Atc "select * from ux_available_extensions where name='uxcrypto' or name='uxsodium'"`;
 	chomp(@has_crypto);
 	if ($#has_crypto < 0) {
-		$self->logmsg('6.11', 'WARNING', 'Extensions pgcrypto or pgsodium are not installed.');
+		$self->logmsg('6.11', 'WARNING', 'Extensions uxcrypto or uxsodium are not installed.');
 		$self->{results}{'6.9'} = 'FAILURE';
 	}
 	else
@@ -2119,11 +2119,11 @@ sub check_6_10
 	my $self = shift;
 
 	$self->logmsg('6.10', 'head2', 'Ensure a data anonymization extension is installed');
-	my $has_anon = `$self->{psql} -Atc "SHOW session_preload_libraries;"`;
+	my $has_anon = `$self->{uxsql} -Atc "SHOW session_preload_libraries;"`;
 	chomp($has_anon);
 	my @libs = split(/,/, $has_anon);
-	if (!grep(/^(anon|pg_anonymize)$/, @libs)) {
-		$self->logmsg('6.12', 'WARNING', 'Extensions pg_anonymize or anon are not installed.');
+	if (!grep(/^(anon|ux_anonymize)$/, @libs)) {
+		$self->logmsg('6.12', 'WARNING', 'Extensions ux_anonymize or anon are not installed.');
 		$self->{results}{'6.10'} = 'FAILURE';
 	}
 	else
@@ -2142,7 +2142,7 @@ sub check_7_1
 	my $self = shift;
 
 	# Ensure a replication-only user is created and used for streaming replication
-	my @repusers = `$self->{psql} -Atc "select rolname from pg_roles where rolreplication is true;"`;
+	my @repusers = `$self->{uxsql} -Atc "select rolname from ux_roles where rolreplication is true;"`;
 	chomp(@repusers);
 	# Check if there's any replication user outside the postgres superuser
 	if ($#repusers < 1) {
@@ -2160,7 +2160,7 @@ sub check_7_2
 	my $self = shift;
 
 	# Ensure logging of replication commands is configured
-	my $log_rep = `$self->{psql} -Atc "SHOW log_replication_commands;"`;
+	my $log_rep = `$self->{uxsql} -Atc "SHOW log_replication_commands;"`;
 	chomp($log_rep);
 	if ($log_rep eq 'off') {
 		$self->logmsg('7.2', 'WARNING', 'Setting \'log_replication_commands\' should be enabled.');
@@ -2182,7 +2182,7 @@ sub check_7_4
 	my $self = shift;
 
 	# Ensure WAL archiving is configured and functional
-	my @ret = `$self->{psql} -Atc "SELECT name, setting FROM pg_settings WHERE name ~ '^archive' ORDER BY 1;"`;
+	my @ret = `$self->{uxsql} -Atc "SELECT name, setting FROM ux_settings WHERE name ~ '^archive' ORDER BY 1;"`;
 	chomp(@ret);
 	my %archive_settings = ();
 	foreach my $s (@ret)
@@ -2213,7 +2213,7 @@ sub check_7_5
 	my $self = shift;
 
 	# Ensure streaming replication parameters are configured correctly
-	my $ret = `$self->{psql} -Atc "SHOW primary_conninfo;"`;
+	my $ret = `$self->{uxsql} -Atc "SHOW primary_conninfo;"`;
 	chomp($ret);
 	if ($ret !~ /sslmode=require/) {
 		$self->logmsg('7.6', 'CRITICAL', 'Setting \'primary_conninfo\' must enforce TLS encryption of the replication (sslmode=required).');
@@ -2267,7 +2267,7 @@ sub check_8_3
 	my $self = shift;
 
 	# Ensure miscellaneous configuration settings are correct
-	my @ret = `$self->{psql} -Atc "select name, setting from pg_settings where name in ('external_pid_file', 'unix_socket_directories','shared_preload_libraries','dynamic_library_path','local_preload_libraries','session_preload_libraries');"`;
+	my @ret = `$self->{uxsql} -Atc "select name, setting from ux_settings where name in ('external_pid_file', 'unix_socket_directories','shared_preload_libraries','dynamic_library_path','local_preload_libraries','session_preload_libraries');"`;
 	unshift(@ret, "name|setting\n");
 	$self->logdata(@ret);
 }
